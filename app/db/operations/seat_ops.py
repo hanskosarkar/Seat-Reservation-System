@@ -29,29 +29,87 @@ async def list_seats(conn: asyncpg.Connection, show_id: UUID) -> list[Seat]:
     )
     return [Seat.from_record(r) for r in rows]
 
-async def claim_available_seat(
-    conn,
-    show_id,
-    seat_label: str,
-    reservation_id,
-    user_id: str,
-):
-    row = await conn.fetchrow(
+
+async def count_user_seats(
+    conn: asyncpg.Connection, show_id: UUID, user_id: str
+) -> int:
+    """Seats this user currently holds or has confirmed in this show."""
+    return await conn.fetchval(
         """
-        UPDATE seats
-        SET
-            status = 'confirmed',
-            reservation_id = $3,
-            user_id = $4
-        WHERE show_id = $1
-          AND seat_label = $2
-          AND status = 'available'
-        RETURNING show_id, seat_label
+        SELECT count(*) FROM seats
+        WHERE show_id = $1 AND user_id = $2 AND status IN ('held', 'confirmed')
         """,
-        show_id,
-        seat_label,
-        reservation_id,
-        user_id,
+        show_id, user_id,
     )
 
-    return row
+
+async def lock_seats_ordered(
+    conn: asyncpg.Connection, show_id: UUID, labels: list[str]
+) -> list[Seat]:
+    """Row-lock the given seats (FOR UPDATE) in a fixed, sorted order.
+
+    EVERY code path that locks several seats goes through here, so all
+    transactions acquire seat locks in the same order (ORDER BY seat_label).
+    Two overlapping multi-seat requests can therefore never wait on each other
+    in a cycle: no deadlock. A concurrent request for the same seat blocks
+    here until the first transaction ends, then sees the committed state.
+    """
+    rows = await conn.fetch(
+        """
+        SELECT show_id, seat_label, status, reservation_id, user_id
+        FROM seats
+        WHERE show_id = $1 AND seat_label = ANY($2::text[])
+        ORDER BY seat_label
+        FOR UPDATE
+        """,
+        show_id, labels,
+    )
+    return [Seat.from_record(r) for r in rows]
+
+
+async def mark_confirmed(
+    conn: asyncpg.Connection,
+    show_id: UUID,
+    labels: list[str],
+    reservation_id: UUID,
+    user_id: str,
+) -> int:
+    """Conditional update guarded on current state. Returns rows changed.
+
+    The `status = 'available'` guard makes this race-free even on its own:
+    a seat that is no longer available is simply not updated.
+    """
+    result = await conn.execute(
+        """
+        UPDATE seats
+        SET status = 'confirmed', reservation_id = $3, user_id = $4
+        WHERE show_id = $1
+          AND seat_label = ANY($2::text[])
+          AND status = 'available'
+        """,
+        show_id, labels, reservation_id, user_id,
+    )
+    return int(result.split()[-1])  # "UPDATE 3" -> 3
+
+
+async def release_seats(
+    conn: asyncpg.Connection,
+    show_id: UUID,
+    labels: list[str],
+    reservation_id: UUID,
+) -> int:
+    """Return seats to 'available', but ONLY those still owned by this exact
+    reservation. A seat that now belongs to someone else is never touched, so
+    a release can never resurrect or steal a seat confirmed to another user.
+    """
+    result = await conn.execute(
+        """
+        UPDATE seats
+        SET status = 'available', reservation_id = NULL, user_id = NULL
+        WHERE show_id = $1
+          AND seat_label = ANY($2::text[])
+          AND reservation_id = $3
+        """,
+        show_id, labels, reservation_id,
+    )
+    return int(result.split()[-1])

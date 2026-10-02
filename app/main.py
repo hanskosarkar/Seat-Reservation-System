@@ -34,7 +34,7 @@ def create_app() -> FastAPI:
     app.include_router(health.router)
     app.include_router(auth.router)
     app.include_router(shows.router)
-    app.iclude_router(reservations.router)
+    app.include_router(reservations.router)
     
     return app
 

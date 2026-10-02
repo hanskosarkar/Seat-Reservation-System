@@ -8,6 +8,7 @@ import asyncpg
 from app.db.models.seat import Seat
 from app.db.models.show import Show
 from app.db.operations import seat_ops, show_ops
+from app.db.pool import connection
 from app.errors import NotFound
 
 logger = logging.getLogger("app.shows")
@@ -46,7 +47,7 @@ async def create_show(
     per_user_limit: int,
 ) -> dict:
     show_id = uuid4()
-    async with pool.acquire() as conn:
+    async with connection(pool) as conn:
         # show + all seats in one transaction: no half-created shows
         async with conn.transaction():
             await show_ops.insert_show(
@@ -58,7 +59,7 @@ async def create_show(
 
 
 async def get_show_state(pool: asyncpg.Pool, show_id: UUID) -> dict:
-    async with pool.acquire() as conn:
+    async with connection(pool) as conn:
         # one repeatable-read snapshot: show row and seat rows can't disagree
         async with conn.transaction(isolation="repeatable_read", readonly=True):
             show = await show_ops.get_show(conn, show_id)
