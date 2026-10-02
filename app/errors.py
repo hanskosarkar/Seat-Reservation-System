@@ -27,6 +27,22 @@ class AppError(Exception):
         self.details = details or {}
 
 
+class NotReady(AppError):
+    """Dependency (database) unavailable: readiness fails closed."""
+
+    status_code = 503
+    code = "NOT_READY"
+
+class Unauthorized(AppError):
+    """Missing, malformed, expired or tampered token."""
+
+    status_code = 401
+    code = "UNAUTHORIZED"
+
+class NotFound(AppError):
+    status_code = 404
+    code = "NOT_FOUND"
+
 def error_body(code: str, message: str, details: dict | None = None) -> dict:
     return {"error": {"code": code, "message": message, "details": details or {}}}
 

@@ -32,14 +32,15 @@ async def create_pool() -> asyncpg.Pool:
                 command_timeout=config.DB_COMMAND_TIMEOUT_SECONDS,
                 timeout=config.DB_ACQUIRE_TIMEOUT_SECONDS,
             )
-
+            
             logger.info(f"db_pool_ready attempt={attempt}")
             return pool
         except (OSError, asyncpg.PostgresError, asyncio.TimeoutError) as exc:
             last_exc = exc
             wait = min(2 * attempt, 10)
             logger.warning(
-                f"db_connect_failed attempt={attempt}/{config.DB_CONNECT_RETRIES} retry_in={wait}s err={exc}",
+                f"db_connect_failed attempt={attempt}/{config.DB_CONNECT_RETRIES} "
+                f"retry_in={wait}s err={exc}"
             )
             await asyncio.sleep(wait)
     raise RuntimeError(f"could not connect to database: {last_exc}")

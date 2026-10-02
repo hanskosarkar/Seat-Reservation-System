@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app import config
+from app.api.routes import auth, health, shows
 from app.db.pool import close_pool, create_pool, run_migrations
 from app.errors import register_error_handlers
 
@@ -30,7 +31,10 @@ async def lifespan(app: FastAPI):
 def create_app() -> FastAPI:
     app = FastAPI(title="Seat Reservation Service", lifespan=lifespan)
     register_error_handlers(app)
-    # Routers are wired here in later stages.
+    app.include_router(health.router)
+    app.include_router(auth.router)
+    app.include_router(shows.router)
+    
     return app
 
 
