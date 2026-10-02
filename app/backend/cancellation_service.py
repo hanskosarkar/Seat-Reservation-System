@@ -26,6 +26,15 @@ logger = logging.getLogger("app.reservations")
 
 
 async def cancel(pool: asyncpg.Pool, reservation_id: UUID, user_id: str) -> dict:
+    try:
+        from app.main import REQUEST_ID
+        request_id = REQUEST_ID.get() or "-"
+    except Exception:
+        request_id = "-"
+
+    logger.info(
+        f"cancel.start request_id={request_id} reservation_id={reservation_id} user_id={user_id}"
+    )
     async with connection(pool) as conn:
         async with conn.transaction():
             # plain read first: learn the owner before taking any lock
@@ -41,6 +50,9 @@ async def cancel(pool: asyncpg.Pool, reservation_id: UUID, user_id: str) -> dict
             res = await reservation_ops.get_by_id_for_update(conn, reservation_id)
 
             if res.status == "cancelled":  # idempotent: nothing to release
+                logger.info(
+                    f"cancel.end request_id={request_id} reservation_id={reservation_id} user_id={user_id} status=already_cancelled"
+                )
                 return reservation_to_dict(res)
 
             await seat_ops.lock_seats_ordered(conn, res.show_id, res.seats)
@@ -49,11 +61,15 @@ async def cancel(pool: asyncpg.Pool, reservation_id: UUID, user_id: str) -> dict
             )
             if released != len(res.seats):
                 logger.warning(
-                    f"cancel_released_fewer_seats reservation_id={res.id} "
+                    f"cancel_released_fewer_seats request_id={request_id} reservation_id={res.id} "
                     f"expected={len(res.seats)} released={released}"
                 )
             await reservation_ops.mark_cancelled(conn, res.id)
             logger.info(
-                f"reservation_cancelled reservation_id={res.id} user_id={user_id}"
+                f"reservation_cancelled request_id={request_id} reservation_id={res.id} user_id={user_id}"
             )
-            return {**reservation_to_dict(res), "status": "cancelled"}
+            result = {**reservation_to_dict(res), "status": "cancelled"}
+            logger.info(
+                f"cancel.end request_id={request_id} reservation_id={reservation_id} user_id={user_id}"
+            )
+            return result

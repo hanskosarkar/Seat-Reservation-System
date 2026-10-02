@@ -60,6 +60,15 @@ async def reserve(
 ) -> tuple[dict, bool]:
     """Returns (reservation, replayed). `replayed` is True when this was a
     retry of an earlier request and the ORIGINAL reservation is returned."""
+    try:
+        from app.main import REQUEST_ID
+        request_id = REQUEST_ID.get() or "-"
+    except Exception:
+        request_id = "-"
+
+    logger.info(
+        f"reserve.start request_id={request_id} show_id={show_id} user_id={user_id} seats={seats} idempotency_key={idempotency_key}"
+    )
     async with connection(pool) as conn:
         async with conn.transaction():
             reservation, replayed = await _reserve_in_transaction(
@@ -67,9 +76,12 @@ async def reserve(
             )
     if not replayed:
         logger.info(
-            f"reservation_confirmed show_id={show_id} user_id={user_id} "
+            f"reservation_confirmed request_id={request_id} show_id={show_id} user_id={user_id} "
             f"seats={seats} reservation_id={reservation.id}"
         )
+    logger.info(
+        f"reserve.end request_id={request_id} show_id={show_id} user_id={user_id} replayed={replayed}"
+    )
     return reservation_to_dict(reservation), replayed
 
 
@@ -80,6 +92,15 @@ async def _reserve_in_transaction(
     seats: list[str],
     idempotency_key: str,
 ) -> tuple[Reservation, bool]:
+    try:
+        from app.main import REQUEST_ID
+        request_id = REQUEST_ID.get() or "-"
+    except Exception:
+        request_id = "-"
+
+    logger.info(
+        f"_reserve_in_transaction.start request_id={request_id} show_id={show_id} user_id={user_id} seats={seats} idempotency_key={idempotency_key}"
+    )
     # 1. show
     show = await show_ops.get_show(conn, show_id)
     if show is None:
@@ -99,6 +120,9 @@ async def _reserve_in_transaction(
                 "idempotency key was already used with different seats",
                 {"idempotency_key": idempotency_key},
             )
+        logger.info(
+            f"_reserve_in_transaction.end request_id={request_id} show_id={show_id} user_id={user_id} replayed=True reservation_id={existing.id}"
+        )
         return existing, True
 
     # 4. per-user limit (the advisory lock makes count-then-insert safe)
@@ -144,4 +168,7 @@ async def _reserve_in_transaction(
     if updated != len(seats):
         raise SeatTaken("seat already taken", {"seats": sorted(seats)})
 
+    logger.info(
+        f"_reserve_in_transaction.end request_id={request_id} show_id={show_id} user_id={user_id} replayed=False reservation_id={reservation.id}"
+    )
     return reservation, False
