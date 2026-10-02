@@ -31,7 +31,8 @@ async def create_show(body: CreateShowRequest, request: Request):
         price_paise=body.price_paise,
         per_user_limit=body.per_user_limit,
     )
-    logger.info(f"create_show.end request_id={request_id} show_id={result.id}")
+    show_id = result.get("id") if isinstance(result, dict) else getattr(result, "id", None)
+    logger.info(f"create_show.end request_id={request_id} show_id={show_id}")
     return result
 
 
