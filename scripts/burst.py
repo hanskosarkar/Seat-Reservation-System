@@ -28,7 +28,7 @@ import urllib.parse
 import uuid
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
-
+import ssl
 
 # ----------------------------------------------------------------- http client
 class Client:
@@ -44,7 +44,8 @@ class Client:
 
     def _connect(self):
         cls = http.client.HTTPSConnection if self.scheme == "https" else http.client.HTTPConnection
-        c = cls(self.host, self.port, timeout=self.timeout)
+        context = ssl._create_unverified_context()
+        c = cls(self.host, self.port, timeout=self.timeout, context=context)
         self.local.conn = c
         return c
 
