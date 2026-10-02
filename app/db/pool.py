@@ -24,6 +24,7 @@ async def create_pool() -> asyncpg.Pool:
     """Create the pool, retrying while the database is still coming up."""
     last_exc: Exception | None = None
     for attempt in range(1, config.DB_CONNECT_RETRIES + 1):
+        logger.info(f"initialising connection to the database... db_url: {config.DATABASE_URL}")
         try:
             pool = await asyncpg.create_pool(
                 dsn=config.DATABASE_URL,
