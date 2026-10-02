@@ -46,7 +46,16 @@ async def create_show(
     price_paise: int,
     per_user_limit: int,
 ) -> dict:
+    try:
+        from app.main import REQUEST_ID
+        request_id = REQUEST_ID.get() or "-"
+    except Exception:
+        request_id = "-"
+
     show_id = uuid4()
+    logger.info(
+        f"create_show.start request_id={request_id} name={name} seats={seats} price_paise={price_paise} per_user_limit={per_user_limit}"
+    )
     async with connection(pool) as conn:
         # show + all seats in one transaction: no half-created shows
         async with conn.transaction():
@@ -54,11 +63,20 @@ async def create_show(
                 conn, show_id, name, price_paise, per_user_limit, len(seats)
             )
             await seat_ops.bulk_insert_seats(conn, show_id, seats)
-    logger.info(f"show_created show_id={show_id} seats={len(seats)}")
-    return await get_show_state(pool, show_id)
+    logger.info(f"show_created request_id={request_id} show_id={show_id} seats={len(seats)}")
+    result = await get_show_state(pool, show_id)
+    logger.info(f"create_show.end request_id={request_id} show_id={show_id}")
+    return result
 
 
 async def get_show_state(pool: asyncpg.Pool, show_id: UUID) -> dict:
+    try:
+        from app.main import REQUEST_ID
+        request_id = REQUEST_ID.get() or "-"
+    except Exception:
+        request_id = "-"
+
+    logger.info(f"get_show_state.start request_id={request_id} show_id={show_id}")
     async with connection(pool) as conn:
         # one repeatable-read snapshot: show row and seat rows can't disagree
         async with conn.transaction(isolation="repeatable_read", readonly=True):
@@ -66,4 +84,6 @@ async def get_show_state(pool: asyncpg.Pool, show_id: UUID) -> dict:
             if show is None:
                 raise NotFound("show not found", {"show_id": str(show_id)})
             seats = await seat_ops.list_seats(conn, show_id)
-    return _build_state(show, seats)
+    result = _build_state(show, seats)
+    logger.info(f"get_show_state.end request_id={request_id} show_id={show_id}")
+    return result
