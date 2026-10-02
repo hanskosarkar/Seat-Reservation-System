@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app import config
-from app.api.routes import auth, health, shows
+from app.api.routes import auth, health, shows, reservations 
 from app.db.pool import close_pool, create_pool, run_migrations
 from app.errors import register_error_handlers
 
@@ -34,6 +34,7 @@ def create_app() -> FastAPI:
     app.include_router(health.router)
     app.include_router(auth.router)
     app.include_router(shows.router)
+    app.include_router(reservations.router)
     
     return app
 

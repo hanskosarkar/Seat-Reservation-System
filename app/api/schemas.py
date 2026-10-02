@@ -4,6 +4,21 @@ from pydantic import BaseModel, Field, StrictInt, field_validator
 from app import config
 
 
+def _clean_seat_labels(seats: list[str]) -> list[str]:
+    """Trim, reject blanks / overlong labels / duplicates."""
+    cleaned = [s.strip() for s in seats]
+    for label in cleaned:
+        if not label:
+            raise ValueError("seat labels must not be blank")
+        if len(label) > config.MAX_SEAT_LABEL_LENGTH:
+            raise ValueError(
+                f"seat label longer than {config.MAX_SEAT_LABEL_LENGTH} characters"
+            )
+    if len(set(cleaned)) != len(cleaned):
+        raise ValueError("seat labels must be unique")
+    return cleaned
+
+
 class TokenRequest(BaseModel):
     user_id: str = Field(min_length=1, max_length=64)
 
@@ -40,17 +55,7 @@ class CreateShowRequest(BaseModel):
     @field_validator("seats")
     @classmethod
     def clean_seats(cls, seats: list[str]) -> list[str]:
-        cleaned = [s.strip() for s in seats]
-        for label in cleaned:
-            if not label:
-                raise ValueError("seat labels must not be blank")
-            if len(label) > config.MAX_SEAT_LABEL_LENGTH:
-                raise ValueError(
-                    f"seat label longer than {config.MAX_SEAT_LABEL_LENGTH} characters"
-                )
-        if len(set(cleaned)) != len(cleaned):
-            raise ValueError("seat labels must be unique")
-        return cleaned
+        return _clean_seat_labels(seats)
 
 
 class SeatOut(BaseModel):
@@ -68,3 +73,25 @@ class ShowResponse(BaseModel):
     held: int
     confirmed: int
     seats: list[SeatOut]
+
+
+class ReserveRequest(BaseModel):
+    seats: list[str] = Field(min_length=1, max_length=config.MAX_SEATS_PER_REQUEST)
+    # may instead be sent in the Idempotency-Key header
+    idempotency_key: str | None = Field(
+        default=None, max_length=config.MAX_IDEMPOTENCY_KEY_LENGTH
+    )
+
+    @field_validator("seats")
+    @classmethod
+    def clean_seats(cls, seats: list[str]) -> list[str]:
+        return _clean_seat_labels(seats)
+
+
+class ReservationResponse(BaseModel):
+    reservation_id: str
+    show_id: str
+    user_id: str
+    seats: list[str]
+    amount_paise: int
+    status: str  # confirmed | cancelled
