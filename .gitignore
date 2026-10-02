@@ -6,3 +6,7 @@ venv/
 .pytest_cache/
 .DS_Store
 *.log
+
+docker run --name my-postgres -e POSTGRES_PASSWORD=mysecretpassword -p 5432:5432 -d postgres:16-alpine
+export DATABASE_URL=postgresql://postgres:mysecretpassword@localhost:5432/postgres
+export JWT_SECRET=qRp2Lyd9KlA2KnkD55PpZ42c53ywLlEl0JcfpIZm06D

@@ -28,3 +28,30 @@ async def list_seats(conn: asyncpg.Connection, show_id: UUID) -> list[Seat]:
         show_id,
     )
     return [Seat.from_record(r) for r in rows]
+
+async def claim_available_seat(
+    conn,
+    show_id,
+    seat_label: str,
+    reservation_id,
+    user_id: str,
+):
+    row = await conn.fetchrow(
+        """
+        UPDATE seats
+        SET
+            status = 'confirmed',
+            reservation_id = $3,
+            user_id = $4
+        WHERE show_id = $1
+          AND seat_label = $2
+          AND status = 'available'
+        RETURNING show_id, seat_label
+        """,
+        show_id,
+        seat_label,
+        reservation_id,
+        user_id,
+    )
+
+    return row
