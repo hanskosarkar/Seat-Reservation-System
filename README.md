@@ -88,11 +88,57 @@ uvicorn app.main:app --reload
 Reproduces the on-sale stampede against any running instance (live or local).
 Needs only Python 3.9+ (standard library, no installs).
 
-```bash
-./burst.sh https://<your-service>.onrender.com                      # default: ~5,000-request stampede
-./burst.sh https://<your-service>.onrender.com --requests 20000     # full-size run
-python3 burst.py --help                                             # all knobs
+Important: keep both files together in the same project layout. The bash wrapper calls the Python file by relative path, so the files must stay side by side in the repo:
+
+```text
+.
+├── burst.sh                <-- Script #1 (Bash wrapper)
+└── scripts/
+    └── burst.py            <-- Script #2 (Python workload)
 ```
+
+If you download or copy only one file, the other will be missing and the wrapper will fail. Make sure both are present in the same directory structure before running any command.
+
+**Example commands for a locally cloned project:**
+
+```bash
+# 1) Go to the project folder
+cd /path/to/seat-reservation
+
+# 2) (Optional, only if you want to run the app locally) activate the project venv
+. .venv/bin/activate
+
+# 3) Make the shell script executable if needed
+chmod +x burst.sh
+
+# 4) Run the burst against your local app
+./burst.sh http://localhost:8000                                   # default: ~5,000-request stampede
+./burst.sh http://localhost:8000 --requests 20000                  # full-size run
+sh burst.sh http://localhost:8000 --requests 200                   # run via sh
+python3 scripts/burst.py http://localhost:8000 --requests 200       # run the Python file directly
+python3 scripts/burst.py --help                                   # all knobs
+```
+
+**For a live hosted service, run it like this:**
+
+```bash
+# Go to the folder that contains burst.sh and scripts/burst.py
+cd /path/to/project-or-download-folder
+
+# Make the shell script executable if needed
+chmod +x burst.sh
+
+# Option 1: use the bash wrapper
+./burst.sh https://seat-reservation-system-msi3.onrender.com/ --requests 20000
+
+# Option 2: run the shell script via sh
+sh burst.sh https://seat-reservation-system-msi3.onrender.com/ --requests 20000
+
+# Option 3: run the Python file directly
+python3 scripts/burst.py https://seat-reservation-system-msi3.onrender.com/ --requests 20000
+```
+
+The shell wrapper is just a convenience layer; the underlying burst logic is the Python script in `scripts/burst.py`. The wrapper does not do anything special beyond launching that file with the same arguments.
 
 It creates its own fresh shows and runs five scenarios:
 
@@ -136,6 +182,9 @@ Prometheus client bookkeeping (start timestamps), not business metrics.
 
 ```bash
 curl -s https://<your-service>.onrender.com/metrics | grep -E '^(reservations|seats)'
+
+live service metrics endpoint
+curl -s https://seat-reservation-system-msi3.onrender.com/metrics | grep -E '^(reservations|seats)'
 ```
 
 ## Project layout
