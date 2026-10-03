@@ -54,3 +54,38 @@ Pages (the ones that mean "wrong or down", not "busy"):
 3. **Sustained `429 SERVER_BUSY`** (pool saturation): the service is shedding real customers.
 4. **Reconciliation drift:** `total_seats − seats_available` ≠ `confirmed + held` from the API, or `seats_available` going *up* with no cancels. Either means an invariant is broken: the pager-worthy event for this system.
 
+### 6. AI Usage
+
+I used AI as an implementation assistant. I made the design decisions and directed the implementation.
+
+**Decided and directed by me**
+
+- **Repository structure:** Modular separation of routes, business logic, and database operations.
+- **Double-sell prevention:** Row-level locking on seat rows as the atomic decision point.
+- **Observability:** Confirmed reservations, declines by reason, and available seats.
+
+**Implemented with AI assistance**
+
+- **Row locking:** I chose the approach; AI helped implement the locking logic.
+- **Idempotency:** I chose request fingerprinting using a hash of the seat list. AI helped implement the database constraint, replay handling, and key-conflict logic.
+- **Observability:** AI implemented the Prometheus metrics and `/metrics` endpoint based on my specification.
+
+**What I verified**
+
+- I tested the deployed service on Render and verified the expected behavior, including concurrent requests.
+
+---
+
+### 7. What I Would Do Next
+
+**1. Time-bound seat holds**
+
+Move from immediate confirmation to a two-step flow where seats are held for a fixed period, such as 10 minutes. Expired holds would be automatically released. The existing schema already supports a `held` state.
+
+**2. Payment gateway integration**
+
+Payment confirmation would move a seat from `held` to `confirmed`. Failed or expired payments would release the seat. Payment callbacks would use guarded state transitions and idempotency to handle expiry races and repeated notifications safely.
+
+**3. Confirmed booking cancellation**
+
+Confirmed bookings would continue to be cancellable only by their owner. In the payment-enabled flow, cancellation would also trigger the appropriate refund through the payment gateway.
